@@ -9,6 +9,27 @@ from tfrecord import reader
 from tfrecord import iterator_utils
 
 
+def TFRecordChainDataset(filenames: typing.List[str],
+                         indexes: typing.List[typing.Optional[str]],
+                         description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
+                         shuffle_queue_size: typing.Optional[int] = None,
+                         transform: typing.Callable[[dict], typing.Any] = None,
+                         sequence_description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
+                         compression_type: typing.Optional[str] = None,
+                         ) -> torch.utils.data.dataset.ChainDataset:
+    ds = [
+        TFRecordDataset(data_path=p,
+                        index_path=i,
+                        description=description,
+                        shuffle_queue_size=shuffle_queue_size,
+                        transform=transform,
+                        sequence_description=sequence_description,
+                        compression_type=compression_type)
+        for p, i in zip(filenames, indexes)
+    ]
+    return torch.utils.data.dataset.ChainDataset(ds)
+
+
 class TFRecordDataset(torch.utils.data.IterableDataset):
     """Parse (generic) TFRecords dataset into `IterableDataset` object,
     which contain `np.ndarrays`s. By default (when `sequence_description`
