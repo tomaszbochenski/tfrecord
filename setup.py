@@ -9,7 +9,7 @@ from setuptools import find_packages
 install_requires = []
 if sys.version_info <= (2, 7):
     install_requires += ['future', 'typing']
-install_requires += ['numpy', 'protobuf', 'crc32c', 'Pillow', 'python-magic']
+install_requires += ['numpy', 'protobuf', 'crc32c', 'Pillow', 'python-magic', 'gcsfs']
 
 # read the contents of README file
 this_directory = os.path.abspath(os.path.dirname(__file__))

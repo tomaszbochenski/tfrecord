@@ -10,6 +10,7 @@ import typing
 
 import numpy as np
 from PIL import Image
+from gcsfs import GCSFileSystem
 
 from tfrecord import example_pb2
 from tfrecord import iterator_utils
@@ -45,13 +46,19 @@ def tfrecord_iterator(data_path: str,
         Object referencing the specified `datum_bytes` contained in the
         file (for a single record).
     """
+    gs_location = data_path.startswith("gs://")
+    if gs_location:
+        _file = GCSFileSystem().open(data_path, "rb")
+    else:
+        _file = io.open(data_path, "rb")
+
     if compression_type is not None:
         if compression_type == "GZIP":
-            file = gzip.open(data_path, "rb")
+            file = gzip.GzipFile(fileobj=_file)
         else:
             raise ValueError("Supported compressions: GZIP")
     else:
-        file = io.open(data_path, "rb")
+        file = _file
 
     length_bytes = bytearray(8)
     crc_bytes = bytearray(4)
@@ -63,7 +70,10 @@ def tfrecord_iterator(data_path: str,
         if start_offset is not None:
             file.seek(start_offset)
         if end_offset is None:
-            end_offset = os.path.getsize(data_path)
+            if gs_location:
+                end_offset = GCSFileSystem().du(data_path)
+            else:
+                end_offset = os.path.getsize(data_path)
         while file.tell() < end_offset:
             if file.readinto(length_bytes) != 8:
                 raise RuntimeError("Failed to read the record size.")
@@ -97,6 +107,8 @@ def tfrecord_iterator(data_path: str,
             yield from read_records(start_byte, end_byte)
 
     file.close()
+    if compression_type is not None:
+        _file.close()
 
 
 def process_feature(feature: example_pb2.Feature,
