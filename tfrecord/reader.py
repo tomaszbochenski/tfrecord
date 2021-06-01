@@ -2,11 +2,14 @@
 
 import functools
 import io
+import gzip
 import os
 import struct
+import magic
 import typing
 
 import numpy as np
+from PIL import Image
 
 from tfrecord import example_pb2
 from tfrecord import iterator_utils
@@ -14,7 +17,8 @@ from tfrecord import iterator_utils
 
 def tfrecord_iterator(data_path: str,
                       index_path: typing.Optional[str] = None,
-                      shard: typing.Optional[typing.Tuple[int, int]] = None
+                      shard: typing.Optional[typing.Tuple[int, int]] = None,
+                      compression_type: typing.Optional[str] = None,
                       ) -> typing.Iterable[memoryview]:
     """Create an iterator over the tfrecord dataset.
 
@@ -41,7 +45,13 @@ def tfrecord_iterator(data_path: str,
         Object referencing the specified `datum_bytes` contained in the
         file (for a single record).
     """
-    file = io.open(data_path, "rb")
+    if compression_type is not None:
+        if compression_type == "GZIP":
+            file = gzip.open(data_path, "rb")
+        else:
+            raise ValueError("Supported compressions: GZIP")
+    else:
+        file = io.open(data_path, "rb")
 
     length_bytes = bytearray(8)
     crc_bytes = bytearray(4)
@@ -106,7 +116,15 @@ def process_feature(feature: example_pb2.Feature,
                         f"(should be '{reversed_mapping[inferred_typename]}').")
 
     if inferred_typename == "bytes_list":
-        value = np.frombuffer(value[0], dtype=np.uint8)
+        mime_type = magic.detect_from_content(value[0]).mime_type
+        if mime_type == "image/png":
+            img_list = []
+            for frame in value:
+                img = np.asarray(Image.open(io.BytesIO(frame)))
+                img_list.append(np.expand_dims(img, axis=2))
+            value = np.concatenate(img_list, axis=2)
+        else:
+            value = np.frombuffer(value[0], dtype=np.uint8)
     elif inferred_typename == "float_list":
         value = np.array(value, dtype=np.float32)
     elif inferred_typename == "int64_list":
@@ -155,6 +173,7 @@ def example_loader(data_path: str,
                    index_path: typing.Union[str, None],
                    description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
                    shard: typing.Optional[typing.Tuple[int, int]] = None,
+                   compression_type: typing.Optional[str] = None,
                    ) -> typing.Iterable[typing.Dict[str, np.ndarray]]:
     """Create an iterator over the (decoded) examples contained within
     the dataset.
@@ -196,7 +215,7 @@ def example_loader(data_path: str,
         "int": "int64_list"
     }
 
-    record_iterator = tfrecord_iterator(data_path, index_path, shard)
+    record_iterator = tfrecord_iterator(data_path, index_path, shard, compression_type)
 
     for record in record_iterator:
         example = example_pb2.Example()
@@ -278,6 +297,7 @@ def tfrecord_loader(data_path: str,
                     description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
                     shard: typing.Optional[typing.Tuple[int, int]] = None,
                     sequence_description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
+                    compression_type: typing.Optional[str] = None,
                     ) -> typing.Iterable[typing.Union[typing.Dict[str, np.ndarray],
                                                       typing.Tuple[typing.Dict[str, np.ndarray],
                                                                    typing.Dict[str, typing.List[np.ndarray]]]]]:
@@ -326,7 +346,7 @@ def tfrecord_loader(data_path: str,
     """
     if sequence_description is not None:
         return sequence_loader(data_path, index_path, description, sequence_description, shard)
-    return example_loader(data_path, index_path, description, shard)
+    return example_loader(data_path, index_path, description, shard, compression_type)
 
 
 def multi_tfrecord_loader(data_pattern: str,
