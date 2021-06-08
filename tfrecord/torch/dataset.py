@@ -159,6 +159,7 @@ class MultiTFRecordDataset(torch.utils.data.IterableDataset):
                  shuffle_queue_size: typing.Optional[int] = None,
                  transform: typing.Callable[[dict], typing.Any] = None,
                  sequence_description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
+                 compression_type: typing.Optional[str] = None,
                  ) -> None:
         super(MultiTFRecordDataset, self).__init__()
         self.data_pattern = data_pattern
@@ -167,6 +168,7 @@ class MultiTFRecordDataset(torch.utils.data.IterableDataset):
         self.description = description
         self.sequence_description = sequence_description
         self.shuffle_queue_size = shuffle_queue_size
+        self.compression_type = compression_type
         self.transform = transform
 
     def __iter__(self):
@@ -177,7 +179,8 @@ class MultiTFRecordDataset(torch.utils.data.IterableDataset):
                                           index_pattern=self.index_pattern,
                                           splits=self.splits,
                                           description=self.description,
-                                          sequence_description=self.sequence_description)
+                                          sequence_description=self.sequence_description,
+                                          compression_type=self.compression_type)
         if self.shuffle_queue_size:
             it = iterator_utils.shuffle_iterator(it, self.shuffle_queue_size)
         if self.transform:

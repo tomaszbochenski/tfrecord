@@ -366,6 +366,7 @@ def multi_tfrecord_loader(data_pattern: str,
                           splits: typing.Dict[str, float],
                           description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
                           sequence_description: typing.Union[typing.List[str], typing.Dict[str, str], None] = None,
+                          compression_type: typing.Optional[str] = None,
                           ) -> typing.Iterable[typing.Union[typing.Dict[str, np.ndarray],
                                                             typing.Tuple[typing.Dict[str, np.ndarray],
                                                                          typing.Dict[str, typing.List[np.ndarray]]]]]:
@@ -411,6 +412,7 @@ def multi_tfrecord_loader(data_pattern: str,
                                      if index_pattern is not None else None,
                                  description=description,
                                  sequence_description=sequence_description,
+                                 compression_type=compression_type,
                                  )
                for split in splits.keys()]
     return iterator_utils.sample_iterators(loaders, list(splits.values()))
