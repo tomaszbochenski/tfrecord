@@ -133,8 +133,8 @@ def process_feature(feature: example_pb2.Feature,
             img_list = []
             for frame in value:
                 img = np.asarray(Image.open(io.BytesIO(frame)))
-                img_list.append(np.expand_dims(img, axis=2))
-            value = np.concatenate(img_list, axis=2)
+                img_list.append(np.expand_dims(img, axis=0))
+            value = np.concatenate(img_list, axis=0)
         else:
             value = np.frombuffer(value[0], dtype=np.uint8)
     elif inferred_typename == "float_list":
