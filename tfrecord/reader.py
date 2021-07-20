@@ -9,6 +9,10 @@ import typing
 
 import numpy as np
 
+import magic
+from PIL import Image
+from gcsfs import GCSFileSystem
+
 from tfrecord import example_pb2
 from tfrecord import iterator_utils
 
@@ -44,10 +48,16 @@ def tfrecord_iterator(
         Object referencing the specified `datum_bytes` contained in the
         file (for a single record).
     """
+    gs_data = data_path.startswith("gs://")
+    if gs_data:
+        _file = GCSFileSystem().open(data_path, "rb")
+    else:
+        _file = io.open(data_path, "rb")
+
     if compression_type == "gzip":
-        file = gzip.open(data_path, "rb")
+        file = gzip.GzipFile(fileobj=_file)
     elif compression_type is None:
-        file = io.open(data_path, "rb")
+        file = _file
     else:
         raise ValueError("compression_type should be either 'gzip' or None")
     length_bytes = bytearray(8)
@@ -60,7 +70,10 @@ def tfrecord_iterator(
         if start_offset is not None:
             file.seek(start_offset)
         if end_offset is None:
-            end_offset = os.path.getsize(data_path)
+            if gs_data:
+                end_offset = GCSFileSystem().du(data_path)
+            else:
+                end_offset = os.path.getsize(data_path)
         while file.tell() < end_offset:
             if file.readinto(length_bytes) != 8:
                 raise RuntimeError("Failed to read the record size.")
@@ -113,7 +126,15 @@ def process_feature(feature: example_pb2.Feature,
                         f"(should be '{reversed_mapping[inferred_typename]}').")
 
     if inferred_typename == "bytes_list":
-        value = np.frombuffer(value[0], dtype=np.uint8)
+        mime_type = magic.detect_from_content(value[0]).mime_type
+        if mime_type == "image/png":
+            img_list = []
+            for frame in value:
+                img = np.array(Image.open(io.BytesIO(frame)))
+                img_list.append(np.expand_dims(img, axis=0))
+            value = np.concatenate(img_list, axis=0)
+        else:
+            value = np.frombuffer(value[0], dtype=np.uint8)
     elif inferred_typename == "float_list":
         value = np.array(value, dtype=np.float32)
     elif inferred_typename == "int64_list":
