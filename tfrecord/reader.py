@@ -92,7 +92,12 @@ def tfrecord_iterator(
     if index_path is None:
         yield from read_records()
     else:
-        index = np.loadtxt(index_path, dtype=np.int64)[:, 0]
+        if index_path.startswith("gs://"):
+            _file = GCSFileSystem().open(index_path, "rb")
+        else:
+            _file = io.open(index_path, "rb")
+        index = np.loadtxt(_file, dtype=np.int64)[:, 0]
+        _file.close()
         if shard is None:
             offset = np.random.choice(index)
             yield from read_records(offset)
