@@ -152,6 +152,8 @@ class MultiTFRecordDataset(torch.utils.data.IterableDataset):
                  infinite: bool = True
                  ) -> None:
         super(MultiTFRecordDataset, self).__init__()
+        if index_pattern is not None:
+            raise ValueError("Index pattern is currently unsupported")
         self.data_pattern = data_pattern
         self.index_pattern = index_pattern
         self.splits = splits
@@ -164,11 +166,16 @@ class MultiTFRecordDataset(torch.utils.data.IterableDataset):
 
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
+        sorted_splits_keys = sorted(list(self.splits.keys()))
+        splits_keys = sorted_splits_keys
         if worker_info is not None:
+            splits_keys = [k for i, k in enumerate(sorted_splits_keys) if i
+                           % worker_info.num_workers == worker_info.id]
             np.random.seed(worker_info.seed % np.iinfo(np.uint32).max)
+        splits = {k: self.splits[k] for k in splits_keys}
         it = reader.multi_tfrecord_loader(data_pattern=self.data_pattern,
                                           index_pattern=self.index_pattern,
-                                          splits=self.splits,
+                                          splits=splits,
                                           description=self.description,
                                           sequence_description=self.sequence_description,
                                           compression_type=self.compression_type,
